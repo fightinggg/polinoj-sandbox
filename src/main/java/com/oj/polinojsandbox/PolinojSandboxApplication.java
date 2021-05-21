@@ -1,5 +1,6 @@
 package com.oj.polinojsandbox;
 
+import com.google.common.collect.Lists;
 import com.jlefebure.spring.boot.minio.MinioException;
 import com.jlefebure.spring.boot.minio.MinioService;
 import org.apache.commons.io.FileUtils;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.*;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
@@ -136,7 +138,7 @@ public class PolinojSandboxApplication {
             String samplePath = PropertiesConsts.running + "/samples/" + sampleTestDTO.getProblemId();
             File sampleFiles = new File(samplePath);
             String[] files = sampleFiles.list();
-            List<String> fileList = new ArrayList<>(List.of(files == null ? new String[0] : files));
+            List<String> fileList = Lists.newArrayList(files == null ? new String[0] : files);
             fileList.sort(String::compareTo);
 
             List<SampleTestResult> results = new ArrayList<>();
@@ -228,7 +230,7 @@ public class PolinojSandboxApplication {
                 savePathFile.delete();
             }
             try {
-                minioService.getAndSave(Path.of(sampleTestDTO.getCosPath()), saveZipPath);
+                minioService.getAndSave(Paths.get(sampleTestDTO.getCosPath()), saveZipPath);
                 ZipFile zipFile = new ZipFile(saveZipPath);
                 final Enumeration<? extends ZipEntry> entries = zipFile.entries();
                 while (entries.hasMoreElements()) {
