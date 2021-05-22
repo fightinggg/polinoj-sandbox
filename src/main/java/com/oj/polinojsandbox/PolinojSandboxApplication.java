@@ -35,7 +35,7 @@ public class PolinojSandboxApplication implements CommandLineRunner {
     private MinioService minioService;
 
 
-    public void cc(String src, String execDir, String execName, int times) throws IOException {
+    public String cc(String src, String execDir, String execName, int times) throws IOException {
         String[] cc = {
                 "docker", "run", "--rm",
                 "-v", String.format("%s:/main.cpp", src),
@@ -53,8 +53,9 @@ public class PolinojSandboxApplication implements CommandLineRunner {
             throw SandBoxException.buildException(SandBoxErrorCode.COMPILE_TIMEOUT);
         }
 
-        IOUtils.copy(pro.getInputStream(), System.out);
-        IOUtils.copy(pro.getErrorStream(), System.out);
+        String stdout = IOUtils.toString(pro.getInputStream());
+        String errout = IOUtils.toString(pro.getErrorStream());
+        return "stdout:\n" + stdout + "errout:\n" + errout;
     }
 
     public SampleTestResult run(String target, String sampleInput, String sampleOutput,
@@ -68,8 +69,8 @@ public class PolinojSandboxApplication implements CommandLineRunner {
                 "-v", String.format("%s:/main", target),
                 "-v", String.format("%s:/1.in", sampleInput),
                 "-v", String.format("%s:/out", programOutputDir),
-                "gcc",
-                "/bin/sh", "-c", String.format("/main < /1.in > /out/%s && exit $?", programOutputName)
+                "1144560553/polinoj-sandbox-cpp",
+                "/usr/bin/time", "-v", String.format("/main < /1.in > /out/%s", programOutputName)
         };
 
         long beginTime = System.currentTimeMillis();
@@ -81,8 +82,10 @@ public class PolinojSandboxApplication implements CommandLineRunner {
                 sampleTestResult.setReturnCode(ProgramResult.TLE);
                 return sampleTestResult;
             }
-            IOUtils.copy(pro.getInputStream(), System.out);
-            IOUtils.copy(pro.getErrorStream(), System.out);
+            String stdout = IOUtils.toString(pro.getInputStream());
+            String errout = IOUtils.toString(pro.getErrorStream());
+            log.info("user code with time stdout:{}", stdout);
+            log.info("user code with time errout:{}", errout);
 
             if (pro.exitValue() != 0) {
                 sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
@@ -108,7 +111,7 @@ public class PolinojSandboxApplication implements CommandLineRunner {
                 "gcc",
                 "/bin/sh", "-c", "diff /1.out /2.out"
         };
-        Process pro = null;
+        Process pro;
         try {
             pro = Runtime.getRuntime().exec(check);
             pro.waitFor();
@@ -126,7 +129,8 @@ public class PolinojSandboxApplication implements CommandLineRunner {
     }
 
 
-    public List<SampleTestResult> test(SampleTestDTO sampleTestDTO) {
+    public TestResultDTO test(SampleTestDTO sampleTestDTO) {
+        TestResultDTO testResultDTO = new TestResultDTO();
 
         String workspace = sandBoxProperties.getRunning() + "/" + sampleTestDTO.getId();
         File workspaceFile = new File(workspace);
@@ -140,7 +144,9 @@ public class PolinojSandboxApplication implements CommandLineRunner {
             new FileOutputStream(srcFile).write(sampleTestDTO.getCode().getBytes());
             String targetFileDir = workspace + "/target";
             String targetFileName = "main";
-            cc(srcFileName, targetFileDir, targetFileName, sampleTestDTO.getCcTimes());
+
+            String ccInfo = cc(srcFileName, targetFileDir, targetFileName, sampleTestDTO.getCcTimes());
+            testResultDTO.setCcInfo(ccInfo);
 
             String samplePath = sandBoxProperties.getRunning() + "/samples/" + sampleTestDTO.getProblemId();
             File sampleFiles = new File(samplePath);
@@ -160,7 +166,8 @@ public class PolinojSandboxApplication implements CommandLineRunner {
                 );
                 results.add(run);
             }
-            return results;
+            testResultDTO.setSampleTestResults(results);
+            return testResultDTO;
         } catch (IOException e) {
             e.printStackTrace();
             throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
@@ -174,7 +181,7 @@ public class PolinojSandboxApplication implements CommandLineRunner {
     }
 
     @PostMapping
-    List<SampleTestResult> postMap(@RequestBody SampleTestDTO sampleTestDTO) {
+    TestResultDTO postMap(@RequestBody SampleTestDTO sampleTestDTO) {
         byte[] code = Base64.getDecoder().decode(sampleTestDTO.getCode());
         sampleTestDTO.setCode(new String(code));
 
@@ -199,10 +206,12 @@ public class PolinojSandboxApplication implements CommandLineRunner {
                 savePathFile.delete();
             }
             savePathFile.mkdirs();
+
+
             String saveZipPath = sandBoxProperties.getRunning() + "/zipsamples/" + sampleTestDTO.getProblemId() + ".zip";
             File saveZipPathFile = new File(saveZipPath);
             if (saveZipPathFile.exists()) {
-                savePathFile.delete();
+                saveZipPathFile.delete();
             }
             try {
                 minioService.getAndSave(Paths.get(sampleTestDTO.getCosPath()), saveZipPath);
