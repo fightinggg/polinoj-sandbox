@@ -86,7 +86,6 @@ public class PolinojSandboxApplication implements CommandLineRunner {
 
             if (pro.exitValue() != 0) {
                 sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
-                log.info("program return code is {}", pro.exitValue());
                 sampleTestResult.setReturnCode(ProgramResult.RE);
                 return sampleTestResult;
             }
