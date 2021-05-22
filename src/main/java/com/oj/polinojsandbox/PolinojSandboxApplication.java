@@ -3,6 +3,7 @@ package com.oj.polinojsandbox;
 import com.google.common.collect.Lists;
 import com.jlefebure.spring.boot.minio.MinioException;
 import com.jlefebure.spring.boot.minio.MinioService;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+@Slf4j
 @EnableConfigurationProperties
 @RestController
 @SpringBootApplication
@@ -56,8 +58,8 @@ public class PolinojSandboxApplication implements CommandLineRunner {
     }
 
     public SampleTestResult run(String target, String sampleInput, String sampleOutput,
-                                       String programOutputDir, String programOutputName,
-                                       int times) {
+                                String programOutputDir, String programOutputName,
+                                int times) {
         SampleTestResult sampleTestResult = new SampleTestResult();
 
         // 运行
@@ -84,12 +86,14 @@ public class PolinojSandboxApplication implements CommandLineRunner {
 
             if (pro.exitValue() != 0) {
                 sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
+                log.info("program return code is {}", pro.exitValue());
                 sampleTestResult.setReturnCode(ProgramResult.RE);
                 return sampleTestResult;
             }
         } catch (InterruptedException e) {
             throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
         } catch (IOException e) {
+            log.error("", e);
             sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
             sampleTestResult.setReturnCode(ProgramResult.RE);
             return sampleTestResult;
@@ -166,24 +170,8 @@ public class PolinojSandboxApplication implements CommandLineRunner {
         }
     }
 
-    public static void main(String[] args) throws IOException {
-
-        String workspace = "/Users/s/Desktop/tmp";
-
-        String code = "#include<bits/stdc++.h>\n" +
-                "using namespace std;\n" +
-                "\n" +
-                "int main(){\n" +
-                "  int a,b;\n" +
-                "  cin>>a>>b;\n" +
-                "  cout<<(a+b)<<endl;\n" +
-                "}\n";
-
-        final byte[] encode = Base64.getEncoder().encode(code.getBytes());
-        System.out.println(new String(encode));
-
+    public static void main(String[] args) {
         SpringApplication.run(PolinojSandboxApplication.class, args);
-
     }
 
     @PostMapping
