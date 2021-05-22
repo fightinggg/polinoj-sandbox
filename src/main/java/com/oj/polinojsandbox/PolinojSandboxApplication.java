@@ -5,31 +5,35 @@ import com.jlefebure.spring.boot.minio.MinioException;
 import com.jlefebure.spring.boot.minio.MinioService;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.EnumUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.*;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+@EnableConfigurationProperties
 @RestController
 @SpringBootApplication
-public class PolinojSandboxApplication {
+public class PolinojSandboxApplication implements CommandLineRunner {
+
+    @Autowired
+    private SandBoxProperties sandBoxProperties;
 
     @Autowired
     private MinioService minioService;
 
 
-    public static void cc(String src, String execDir, String execName, int times) throws IOException {
+    public void cc(String src, String execDir, String execName, int times) throws IOException {
         String[] cc = {
                 "docker", "run", "--rm",
                 "-v", String.format("%s:/main.cpp", src),
@@ -51,7 +55,7 @@ public class PolinojSandboxApplication {
         IOUtils.copy(pro.getErrorStream(), System.out);
     }
 
-    public static SampleTestResult run(String target, String sampleInput, String sampleOutput,
+    public SampleTestResult run(String target, String sampleInput, String sampleOutput,
                                        String programOutputDir, String programOutputName,
                                        int times) {
         SampleTestResult sampleTestResult = new SampleTestResult();
@@ -119,9 +123,9 @@ public class PolinojSandboxApplication {
     }
 
 
-    public static List<SampleTestResult> test(SampleTestDTO sampleTestDTO) {
+    public List<SampleTestResult> test(SampleTestDTO sampleTestDTO) {
 
-        String workspace = PropertiesConsts.running + "/" + sampleTestDTO.getId();
+        String workspace = sandBoxProperties.getRunning() + "/" + sampleTestDTO.getId();
         File workspaceFile = new File(workspace);
         try {
             workspaceFile.mkdirs();
@@ -135,7 +139,7 @@ public class PolinojSandboxApplication {
             String targetFileName = "main";
             cc(srcFileName, targetFileDir, targetFileName, sampleTestDTO.getCcTimes());
 
-            String samplePath = PropertiesConsts.running + "/samples/" + sampleTestDTO.getProblemId();
+            String samplePath = sandBoxProperties.getRunning() + "/samples/" + sampleTestDTO.getProblemId();
             File sampleFiles = new File(samplePath);
             String[] files = sampleFiles.list();
             List<String> fileList = Lists.newArrayList(files == null ? new String[0] : files);
@@ -178,22 +182,6 @@ public class PolinojSandboxApplication {
         final byte[] encode = Base64.getEncoder().encode(code.getBytes());
         System.out.println(new String(encode));
 
-
-        File f = new File(PropertiesConsts.running);
-        if (!f.exists()) {
-            f.mkdirs();
-        }
-
-        f = new File(PropertiesConsts.running + "/zipsamples/");
-        if (!f.exists()) {
-            f.mkdirs();
-        }
-
-        f = new File(PropertiesConsts.running + "/samples/");
-        if (!f.exists()) {
-            f.mkdirs();
-        }
-
         SpringApplication.run(PolinojSandboxApplication.class, args);
 
     }
@@ -203,7 +191,7 @@ public class PolinojSandboxApplication {
         byte[] code = Base64.getDecoder().decode(sampleTestDTO.getCode());
         sampleTestDTO.setCode(new String(code));
 
-        String savePath = PropertiesConsts.running + "/samples/" + sampleTestDTO.getProblemId();
+        String savePath = sandBoxProperties.getRunning() + "/samples/" + sampleTestDTO.getProblemId();
 
         boolean update = true;
         File md5 = new File(savePath + "/.md5");
@@ -224,7 +212,7 @@ public class PolinojSandboxApplication {
                 savePathFile.delete();
             }
             savePathFile.mkdirs();
-            String saveZipPath = PropertiesConsts.running + "/zipsamples/" + sampleTestDTO.getProblemId() + ".zip";
+            String saveZipPath = sandBoxProperties.getRunning() + "/zipsamples/" + sampleTestDTO.getProblemId() + ".zip";
             File saveZipPathFile = new File(saveZipPath);
             if (saveZipPathFile.exists()) {
                 savePathFile.delete();
@@ -246,5 +234,23 @@ public class PolinojSandboxApplication {
         }
 
         return test(sampleTestDTO);
+    }
+
+    @Override
+    public void run(String... args) throws Exception {
+        File f = new File(sandBoxProperties.getRunning());
+        if (!f.exists()) {
+            f.mkdirs();
+        }
+
+        f = new File(sandBoxProperties.getRunning() + "/zipsamples/");
+        if (!f.exists()) {
+            f.mkdirs();
+        }
+
+        f = new File(sandBoxProperties.getRunning() + "/samples/");
+        if (!f.exists()) {
+            f.mkdirs();
+        }
     }
 }
