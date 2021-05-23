@@ -16,10 +16,11 @@
 
     <repositories>
         <repository>
-            <id>github</id>
-            <url>https://maven.pkg.github.com/fightinggg/*</url>
+            <id>maven-repo-master</id>
+            <url>https://github.com/fightinggg/maven-repository/raw/com.oj.polinoj-sandbox-open-api-0.0.1-SNAPSHOT/</url>
             <snapshots>
                 <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
             </snapshots>
         </repository>
     </repositories>
