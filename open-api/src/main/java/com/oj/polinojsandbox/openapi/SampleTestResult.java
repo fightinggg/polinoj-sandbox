@@ -1,4 +1,4 @@
-package com.oj.polinojsandbox;
+package com.oj.polinojsandbox.openapi;
 
 import lombok.Data;
 

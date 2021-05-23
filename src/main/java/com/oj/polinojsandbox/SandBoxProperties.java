@@ -10,4 +10,5 @@ import org.springframework.stereotype.Component;
 public class SandBoxProperties {
     public final static String prefix = "polinoj.sandbox";
     private String running = ".running";
+    private Integer concurrentTestSize = 2;
 }

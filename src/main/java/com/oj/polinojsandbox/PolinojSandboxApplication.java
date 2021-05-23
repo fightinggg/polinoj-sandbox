@@ -1,8 +1,8 @@
 package com.oj.polinojsandbox;
 
-import com.google.common.collect.Lists;
 import com.jlefebure.spring.boot.minio.MinioException;
 import com.jlefebure.spring.boot.minio.MinioService;
+import com.oj.polinojsandbox.openapi.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
@@ -11,14 +11,11 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.*;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -34,165 +31,26 @@ public class PolinojSandboxApplication implements CommandLineRunner {
     @Autowired
     private MinioService minioService;
 
-
-    public String cc(String src, String execDir, String execName, int times) throws IOException {
-        String[] cc = {
-                "docker", "run", "--rm",
-                "-v", String.format("%s:/main.cpp", src),
-                "-v", String.format("%s:/out", execDir),
-                "gcc",
-                "/bin/sh", "-c", String.format("g++ /main.cpp -o /out/%s", execName)
-        };
-
-        Process pro = Runtime.getRuntime().exec(cc);
-
-
-        try {
-            pro.waitFor(times, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            throw SandBoxException.buildException(SandBoxErrorCode.COMPILE_TIMEOUT);
-        }
-
-        String stdout = IOUtils.toString(pro.getInputStream());
-        String errout = IOUtils.toString(pro.getErrorStream());
-        return "stdout:\n" + stdout + "errout:\n" + errout;
-    }
-
-    public SampleTestResult run(String target, String sampleInput, String sampleOutput,
-                                String programOutputDir, String programOutputName,
-                                int times) {
-        SampleTestResult sampleTestResult = new SampleTestResult();
-
-        // 运行
-        String[] run = {
-                "docker", "run", "--rm",
-                "-v", String.format("%s:/main", target),
-                "-v", String.format("%s:/1.in", sampleInput),
-                "-v", String.format("%s:/out", programOutputDir),
-                "1144560553/polinoj-sandbox-cpp",
-                "/usr/bin/time", "-v", String.format("/main < /1.in > /out/%s", programOutputName)
-        };
-
-        long beginTime = System.currentTimeMillis();
-        try {
-            Process pro = Runtime.getRuntime().exec(run);
-            final boolean b = pro.waitFor(times, TimeUnit.SECONDS);
-            if (!b) {
-                sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
-                sampleTestResult.setReturnCode(ProgramResult.TLE);
-                return sampleTestResult;
-            }
-            String stdout = IOUtils.toString(pro.getInputStream());
-            String errout = IOUtils.toString(pro.getErrorStream());
-            log.info("user code with time stdout:{}", stdout);
-            log.info("user code with time errout:{}", errout);
-
-            if (pro.exitValue() != 0) {
-                sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
-                sampleTestResult.setReturnCode(ProgramResult.RE);
-                return sampleTestResult;
-            }
-        } catch (InterruptedException e) {
-            throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
-        } catch (IOException e) {
-            log.error("", e);
-            sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
-            sampleTestResult.setReturnCode(ProgramResult.RE);
-            return sampleTestResult;
-        }
-        sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
-
-
-        // 评测
-        String[] check = {
-                "docker", "run", "--rm",
-                "-v", String.format("%s:/1.out", sampleOutput),
-                "-v", String.format("%s/%s:/2.out", programOutputDir, programOutputName),
-                "gcc",
-                "/bin/sh", "-c", "diff /1.out /2.out"
-        };
-        Process pro;
-        try {
-            pro = Runtime.getRuntime().exec(check);
-            pro.waitFor();
-            IOUtils.copy(pro.getInputStream(), System.out);
-            IOUtils.copy(pro.getErrorStream(), System.out);
-        } catch (IOException | InterruptedException e) {
-            throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
-        }
-        if (pro.exitValue() != 0) {
-            sampleTestResult.setReturnCode(ProgramResult.WA);
-        } else {
-            sampleTestResult.setReturnCode(ProgramResult.AC);
-        }
-        return sampleTestResult;
-    }
-
-
-    public TestResultDTO test(SampleTestDTO sampleTestDTO) {
-        TestResultDTO testResultDTO = new TestResultDTO();
-
-        String workspace = sandBoxProperties.getRunning() + "/" + sampleTestDTO.getId();
-        File workspaceFile = new File(workspace);
-        try {
-            workspaceFile.mkdirs();
-            workspace = workspaceFile.getAbsolutePath();
-
-            String srcFileName = workspace + "/main.cpp";
-            File srcFile = new File(srcFileName);
-            srcFile.createNewFile();
-            new FileOutputStream(srcFile).write(sampleTestDTO.getCode().getBytes());
-            String targetFileDir = workspace + "/target";
-            String targetFileName = "main";
-
-            String ccInfo = cc(srcFileName, targetFileDir, targetFileName, sampleTestDTO.getCcTimes());
-            testResultDTO.setCcInfo(ccInfo);
-
-            String samplePath = sandBoxProperties.getRunning() + "/samples/" + sampleTestDTO.getProblemId();
-            File sampleFiles = new File(samplePath);
-            String[] files = sampleFiles.list();
-            List<String> fileList = Lists.newArrayList(files == null ? new String[0] : files);
-            fileList.sort(String::compareTo);
-
-            List<SampleTestResult> results = new ArrayList<>();
-            for (int i = 0; i < fileList.size(); i += 2) {
-                String stdin = fileList.get(i);
-                String stdout = fileList.get(i + 1);
-                final SampleTestResult run = run(targetFileDir + "/" + targetFileName,
-                        sampleFiles.getAbsolutePath() + "/" + stdin,
-                        sampleFiles.getAbsolutePath() + "/" + stdout,
-                        workspace + "/" + stdin.substring(0, stdin.length() - 3),
-                        "out.txt", sampleTestDTO.getRunTimes()
-                );
-                results.add(run);
-            }
-            testResultDTO.setSampleTestResults(results);
-            return testResultDTO;
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
-        } finally {
-            workspaceFile.delete();
-        }
-    }
+    @Autowired
+    private SandboxQueue sandboxQueue;
 
     public static void main(String[] args) {
         SpringApplication.run(PolinojSandboxApplication.class, args);
     }
 
     @PostMapping
-    TestResultDTO postMap(@RequestBody SampleTestDTO sampleTestDTO) {
-        byte[] code = Base64.getDecoder().decode(sampleTestDTO.getCode());
-        sampleTestDTO.setCode(new String(code));
+    SampleTestResponseDTO sampleTest(@RequestBody SampleTestRequestDTO sampleTestRequestDTO) {
+        byte[] code = Base64.getDecoder().decode(sampleTestRequestDTO.getCode());
+        sampleTestRequestDTO.setCode(new String(code));
 
-        String savePath = sandBoxProperties.getRunning() + "/samples/" + sampleTestDTO.getProblemId();
+        String savePath = sandBoxProperties.getRunning() + "/samples/" + sampleTestRequestDTO.getProblemId();
 
         boolean update = true;
         File md5 = new File(savePath + "/.md5");
         if (md5.exists()) {
             try {
                 final String md5Code = FileUtils.readFileToString(md5);
-                if (md5Code.equals(sampleTestDTO.getSamplesMD5())) {
+                if (md5Code.equals(sampleTestRequestDTO.getSamplesMD5())) {
                     update = false;
                 }
             } catch (IOException e) {
@@ -208,13 +66,13 @@ public class PolinojSandboxApplication implements CommandLineRunner {
             savePathFile.mkdirs();
 
 
-            String saveZipPath = sandBoxProperties.getRunning() + "/zipsamples/" + sampleTestDTO.getProblemId() + ".zip";
+            String saveZipPath = sandBoxProperties.getRunning() + "/zipsamples/" + sampleTestRequestDTO.getProblemId() + ".zip";
             File saveZipPathFile = new File(saveZipPath);
             if (saveZipPathFile.exists()) {
                 saveZipPathFile.delete();
             }
             try {
-                minioService.getAndSave(Paths.get(sampleTestDTO.getCosPath()), saveZipPath);
+                minioService.getAndSave(Paths.get(sampleTestRequestDTO.getCosPath()), saveZipPath);
                 ZipFile zipFile = new ZipFile(saveZipPath);
                 final Enumeration<? extends ZipEntry> entries = zipFile.entries();
                 while (entries.hasMoreElements()) {
@@ -228,8 +86,18 @@ public class PolinojSandboxApplication implements CommandLineRunner {
                 e.printStackTrace();
             }
         }
+        String id = UUID.randomUUID().toString();
 
-        return test(sampleTestDTO);
+        sandboxQueue.submit(sampleTestRequestDTO, id);
+
+        SampleTestResponseDTO sampleTestResponseDTO = new SampleTestResponseDTO();
+        sampleTestResponseDTO.setId(id);
+        return sampleTestResponseDTO;
+    }
+
+    @GetMapping("/{id}")
+    SampleTestResultDTO getStatus(@PathVariable String id) {
+        return sandboxQueue.getStatus(id);
     }
 
     @Override
