@@ -13,11 +13,23 @@
     <version>0.0.1-SNAPSHOT</version>
     <name>polinoj-sandbox</name>
     <description>Demo project for Spring Boot</description>
+
+    <repositories>
+        <repository>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/fightinggg/*</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
     <properties>
         <java.version>1.8</java.version>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
+
     <dependencies>
 
         <dependency>
