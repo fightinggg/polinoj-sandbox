@@ -1,7 +1,7 @@
 FROM maven:3.8.1-openjdk-8
 COPY . /app
 WORKDIR /app
-RUN mvn package -Dmaven.test.skip=true -q
+RUN mvn package -Dmaven.test.skip=true
 
 FROM openjdk:8-jre
 RUN wget https://get.docker.com/builds/Linux/x86_64/docker-1.13.0.tgz \
