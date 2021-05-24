@@ -75,6 +75,7 @@ public class SandboxQueue {
                 "docker", "run", "--rm",
                 "-v", String.format("%s:/main.cpp", src),
                 "-v", String.format("%s:/out", execDir),
+                "--cpus", sandBoxProperties.getCcCpus(),
                 "gcc",
                 "/bin/sh", "-c", String.format("g++ /main.cpp -o /out/%s", execName)
         };
@@ -105,6 +106,7 @@ public class SandboxQueue {
                 "-v", String.format("%s:/main", target),
                 "-v", String.format("%s:/1.in", sampleInput),
                 "-v", String.format("%s:/out", programOutputDir),
+                "--cpus", sandBoxProperties.getRunCpus(),
                 "1144560553/polinoj-sandbox-cpp",
                 "bash", "-c", String.format("/usr/bin/time -f %%e,%%S,%%U,%%x /main < /1.in > /out/%s && exit 0", programOutputName)
         };
@@ -145,6 +147,7 @@ public class SandboxQueue {
                 "docker", "run", "--rm",
                 "-v", String.format("%s:/1.out", sampleOutput),
                 "-v", String.format("%s/%s:/2.out", programOutputDir, programOutputName),
+                "--cpus", sandBoxProperties.getCheckCpus(),
                 "gcc",
                 "/bin/sh", "-c", "diff /1.out /2.out"
         };
