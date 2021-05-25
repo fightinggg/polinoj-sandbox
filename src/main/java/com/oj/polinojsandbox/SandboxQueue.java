@@ -206,7 +206,7 @@ public class SandboxQueue {
 
         boolean timeout;
         try {
-            timeout = !pro.waitFor(10 + (long) (times / Double.parseDouble(sandBoxProperties.getRunCpus())), TimeUnit.SECONDS);
+            timeout = !pro.waitFor(3 + (long) (times * 3 / Double.parseDouble(sandBoxProperties.getRunCpus())), TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
         }
