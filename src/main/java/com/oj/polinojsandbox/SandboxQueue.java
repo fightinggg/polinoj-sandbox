@@ -174,8 +174,9 @@ public class SandboxQueue {
 
     private SampleTestResult run(String target, String sampleInput, String sampleOutput,
                                  String programOutputDir, String programOutputName,
-                                 Long times) {
+                                 Long times, String submitId) {
         SampleTestResult sampleTestResult = new SampleTestResult();
+        String runContainer = Base64Utils.encodeToString(submitId.getBytes()) + "-run";
 
         // 运行
         String[] run = {
@@ -184,6 +185,7 @@ public class SandboxQueue {
                 "-v", String.format("%s:/1.in", sampleInput),
                 "-v", String.format("%s:/out", programOutputDir),
                 "--cpus", sandBoxProperties.getRunCpus(),
+                "--name", runContainer,
                 "1144560553/polinoj-sandbox-cpp",
                 "bash", "-c", String.format("/usr/bin/time -f %%e,%%S,%%U,%%x /main < /1.in > /out/%s && exit 0", programOutputName)
         };
@@ -212,6 +214,11 @@ public class SandboxQueue {
         if (timeout) {
             sampleTestResult.setTimes((int) (times * 1000));
             sampleTestResult.setReturnCode(ProgramResultEnum.TLE);
+            try {
+                Runtime.getRuntime().exec("docker rm -f " + runContainer).waitFor();
+            } catch (InterruptedException | IOException e) {
+                log.error("结束超时进程失败", e);
+            }
             return sampleTestResult;
         }
 
@@ -357,7 +364,7 @@ public class SandboxQueue {
                     sampleFiles.getAbsolutePath() + "/" + stdin,
                     sampleFiles.getAbsolutePath() + "/" + stdout,
                     workspace + "/" + stdin.substring(0, stdin.length() - 3),
-                    "out.txt", sampleTestRequestDTO.getRunTimes()
+                    "out.txt", sampleTestRequestDTO.getRunTimes(), id
             );
             results.add(run);
             if (!run.getReturnCode().equals(ProgramResultEnum.AC)) {
