@@ -9,6 +9,7 @@ public enum SandBoxErrorCode {
     RUNNING_ERROR("001-000-000-002", "运行时错误"),
     RETURN_ERROR("001-000-000-003", "返回非0"),
     WRONG_ANSWER("001-000-000-004", "答案错误"),
+    COMPILE_ERROR("001-000-000-005", "编译错误"),
 
     // 通用001
     UNKNOW_ERROR("001-001-000-000", "服务器发生未知错误");
