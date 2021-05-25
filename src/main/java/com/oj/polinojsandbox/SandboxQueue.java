@@ -132,20 +132,23 @@ public class SandboxQueue {
             throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
         }
 
+        boolean timeout = false;
         try {
-            if (!pro.waitFor((long) (times / Double.parseDouble(sandBoxProperties.getCcCpus())), TimeUnit.SECONDS)) {
-                sampleTestResultDTO.setStatus(ProgramResultEnum.CE);
-                sampleTestResultDTO.setCcInfo("编译超时");
-                try {
-                    log.info("cc timeout , delete container {}", ccContainer);
-                    Runtime.getRuntime().exec("docker rm -f " + ccContainer).waitFor();
-                } catch (IOException e) {
-                    log.info("delete container error", e);
-                }
-                return false;
-            }
+            timeout = !pro.waitFor((long) (times / Double.parseDouble(sandBoxProperties.getCcCpus())), TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
+        }
+
+        if (timeout) {
+            sampleTestResultDTO.setStatus(ProgramResultEnum.CE);
+            sampleTestResultDTO.setCcInfo("编译超时");
+            try {
+                log.info("cc timeout , delete container {}", ccContainer);
+                Runtime.getRuntime().exec("docker rm -f " + ccContainer).waitFor();
+            } catch (IOException | InterruptedException e) {
+                log.info("delete container error", e);
+            }
+            return false;
         }
 
 
@@ -177,34 +180,51 @@ public class SandboxQueue {
         };
 
         long beginTime = System.currentTimeMillis();
-        try {
-            log.info("exec run command: {}", Lists.newArrayList(run));
-            Process pro = Runtime.getRuntime().exec(run);
-            final boolean b = pro.waitFor(times, TimeUnit.SECONDS);
-            if (!b) {
-                sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
-                sampleTestResult.setReturnCode(ProgramResultEnum.TLE);
-                return sampleTestResult;
-            }
-            String stdout = IOUtils.toString(pro.getInputStream());
-            String errout = IOUtils.toString(pro.getErrorStream());
-            log.info("user code with time stdout:{}", stdout);
-            log.info("user code with time errout:{}", errout);
 
-            if (pro.exitValue() != 0) {
-                sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
-                sampleTestResult.setReturnCode(ProgramResultEnum.RE);
-                return sampleTestResult;
-            }
-        } catch (InterruptedException e) {
-            throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
+
+        log.info("exec run command: {}", Lists.newArrayList(run));
+        Process pro = null;
+        try {
+            pro = Runtime.getRuntime().exec(run);
         } catch (IOException e) {
             log.error("", e);
             sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
             sampleTestResult.setReturnCode(ProgramResultEnum.RE);
             return sampleTestResult;
         }
-        sampleTestResult.setTimes((int) (System.currentTimeMillis() - beginTime));
+
+        boolean timeout;
+        try {
+            timeout = !pro.waitFor(10 + (long) (times / Double.parseDouble(sandBoxProperties.getRunCpus())), TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
+        }
+
+        if (timeout) {
+            sampleTestResult.setTimes((int) (times * 1000));
+            sampleTestResult.setReturnCode(ProgramResultEnum.TLE);
+            return sampleTestResult;
+        }
+
+        String stdout = outputString(pro.getInputStream());
+        String errout = outputString(pro.getErrorStream());
+        log.info("user code with time stdout:{}", stdout);
+        log.info("user code with time errout:{}", errout);
+        String[] errorLine = errout.split("\n");
+        String[] runInfo = errorLine[errorLine.length - 1].split("[,\\s]");
+        int exitValue = Integer.parseInt(runInfo[3]);
+        int runTime = (int) (Double.parseDouble(runInfo[2]) * 1000);
+        sampleTestResult.setTimes(runTime);
+
+        if (runTime > 1000 * times) {
+            sampleTestResult.setReturnCode(ProgramResultEnum.TLE);
+            return sampleTestResult;
+        }
+
+        if (exitValue != 0) {
+            sampleTestResult.setReturnCode(ProgramResultEnum.RE);
+            return sampleTestResult;
+        }
 
 
         // 评测
@@ -216,7 +236,7 @@ public class SandboxQueue {
                 "gcc",
                 "/bin/sh", "-c", "diff /1.out /2.out"
         };
-        Process pro;
+
         try {
             log.info("exec diff command: {}", Lists.newArrayList(check));
             pro = Runtime.getRuntime().exec(check);
@@ -226,6 +246,8 @@ public class SandboxQueue {
         } catch (IOException | InterruptedException e) {
             throw SandBoxException.buildException(SandBoxErrorCode.UNKNOW_ERROR);
         }
+
+
         if (pro.exitValue() != 0) {
             sampleTestResult.setReturnCode(ProgramResultEnum.WA);
         } else {
