@@ -126,6 +126,7 @@ public class SandboxQueue {
                 "-v", String.format("%s:/main.cpp", src),
                 "-v", String.format("%s:/out", execDir),
                 "--cpus", sandBoxProperties.getCcCpus(),
+                "-m","40m",
                 "--name", ccContainer,
                 "gcc",
                 "/bin/sh", "-c", String.format("g++ /main.cpp -o /out/%s", execName)
