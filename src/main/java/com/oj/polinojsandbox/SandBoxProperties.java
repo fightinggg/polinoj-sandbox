@@ -12,6 +12,7 @@ public class SandBoxProperties {
     private String running = ".running";
     private Integer concurrentTestSize = 2;
     private String ccCpus = "0.1";
+    private String ccMemoryMb = "50";
     private String runCpus = "0.1";
     private String checkCpus = "0.1";
 }
