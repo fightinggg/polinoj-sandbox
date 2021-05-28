@@ -1,5 +1,6 @@
 package com.oj.polinojsandbox;
 
+import com.alibaba.fastjson.JSON;
 import com.google.common.collect.Lists;
 import com.jlefebure.spring.boot.minio.MinioException;
 import com.jlefebure.spring.boot.minio.MinioService;
@@ -8,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.codec.json.Jackson2JsonEncoder;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -17,12 +19,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Paths;
-import java.util.Base64;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+
+import static com.oj.polinojsandbox.openapi.SampleTestResultMessage.buildMessage;
 
 
 @Slf4j
@@ -38,13 +41,19 @@ public class KafkaSandboxCompoment {
     @Autowired
     private KafkaTemplate<Object, Object> template;
 
+    private <T> void send(String type, T data) {
+        SampleTestResultMessage<T> sampleTestResultMessage = new SampleTestResultMessage<>();
+        sampleTestResultMessage.setType(type);
+        sampleTestResultMessage.setData(data);
+        String msg = JSON.toJSONString(sampleTestResultMessage);
+        template.send(KafkaTopicConsts.testResultTopic, msg);
+    }
+
 
     @KafkaListener(id = KafkaTopicConsts.submitCodeGroup, topics = KafkaTopicConsts.submitCodeTopic)
     void submit(SubmitCodeMessage submitCodeMessage) {
         log.info("listenSubmit:{}", submitCodeMessage);
         Long id = submitCodeMessage.getSubmitId();
-        byte[] code = Base64.getDecoder().decode(submitCodeMessage.getCode());
-        submitCodeMessage.setCode(new String(code));
 
         String savePath = sandBoxProperties.getRunning() + "/samples/" + submitCodeMessage.getProblemId();
 
@@ -114,7 +123,8 @@ public class KafkaSandboxCompoment {
             FinalCodeMessage finalCodeMessage = new FinalCodeMessage();
             finalCodeMessage.setSubmitId(submitCodeMessage.getSubmitId());
             finalCodeMessage.setStatus(ProgramResultEnum.CE);
-            template.send(KafkaTopicConsts.finalCodeTopic, finalCodeMessage);
+            send(KafkaTopicConsts.finalCodeType, finalCodeMessage);
+            return;
         }
 
         String samplePath = sandBoxProperties.getRunning() + "/samples/" + submitCodeMessage.getProblemId();
@@ -146,7 +156,7 @@ public class KafkaSandboxCompoment {
 
         finalCodeMessage.setStatus(ProgramResultEnum.AC);
 
-        template.send(KafkaTopicConsts.finalCodeTopic, finalCodeMessage);
+        send(KafkaTopicConsts.finalCodeType, finalCodeMessage);
     }
 
     private String outputString(InputStream in) {
@@ -165,7 +175,8 @@ public class KafkaSandboxCompoment {
                 "-v", String.format("%s:/main.cpp", src),
                 "-v", String.format("%s:/out", execDir),
                 "--cpus", sandBoxProperties.getCcCpus(),
-                "-m", sandBoxProperties.getCcMemoryMb() + "m", "--memory-swap=1024M",
+                "-m", sandBoxProperties.getCcMemoryMb() + "m",
+                "--memory-swap", sandBoxProperties.getCcMemoryMb() + "m",
                 "--name", ccContainer,
                 "gcc",
                 "/bin/sh", "-c", String.format("g++ /main.cpp -o /out/%s", execName)
@@ -194,7 +205,7 @@ public class KafkaSandboxCompoment {
             ccCodeMessage.setSubmitId(id);
             //TODO ccTime
             ccCodeMessage.setCcTime(null);
-            template.send(KafkaTopicConsts.ccCodeTopic, ccCodeMessage);
+            send(KafkaTopicConsts.ccCodeType, ccCodeMessage);
             try {
                 log.info("cc timeout , delete container {}", ccContainer);
                 Runtime.getRuntime().exec("docker rm -f " + ccContainer).waitFor();
@@ -212,7 +223,7 @@ public class KafkaSandboxCompoment {
         ccCodeMessage.setSubmitId(id);
         //TODO ccTime
         ccCodeMessage.setCcTime(null);
-        template.send(KafkaTopicConsts.ccCodeTopic, ccCodeMessage);
+        send(KafkaTopicConsts.ccCodeType, ccCodeMessage);
 
         return pro.exitValue() == 0;
     }
@@ -223,7 +234,7 @@ public class KafkaSandboxCompoment {
         runCodeMessage.setTimes(times);
         runCodeMessage.setSubmitId(id);
         runCodeMessage.setReturnCode(ProgramResultEnum.AC);
-        template.send(KafkaTopicConsts.runCodeTopic, runCodeMessage);
+        send(KafkaTopicConsts.runCodeType, runCodeMessage);
     }
 
     private void runfailed(Long id, Integer status, Integer times) {
@@ -231,12 +242,12 @@ public class KafkaSandboxCompoment {
         runCodeMessage.setTimes(times);
         runCodeMessage.setSubmitId(id);
         runCodeMessage.setReturnCode(status);
-        template.send(KafkaTopicConsts.runCodeTopic, runCodeMessage);
+        send(KafkaTopicConsts.runCodeType, runCodeMessage);
 
         FinalCodeMessage finalCodeMessage = new FinalCodeMessage();
         finalCodeMessage.setSubmitId(id);
         finalCodeMessage.setStatus(status);
-        template.send(KafkaTopicConsts.finalCodeTopic, finalCodeMessage);
+        send(KafkaTopicConsts.finalCodeType, finalCodeMessage);
     }
 
     private boolean run(String target, String sampleInput, String sampleOutput,

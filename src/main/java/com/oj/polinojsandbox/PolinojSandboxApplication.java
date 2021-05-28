@@ -20,9 +20,6 @@ public class PolinojSandboxApplication implements CommandLineRunner {
     private SandBoxProperties sandBoxProperties;
 
 
-    @Autowired
-    private KafkaSandboxCompoment kafkaSandboxCompoment;
-
     public static void main(String[] args) {
         SpringApplication.run(PolinojSandboxApplication.class, args);
     }
